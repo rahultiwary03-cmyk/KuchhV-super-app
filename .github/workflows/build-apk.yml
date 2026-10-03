@@ -1,0 +1,52 @@
+name: Build KuchhV APK
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "kuchhv_mobile_app/**"
+      - ".github/workflows/build-apk.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "kuchhv_mobile_app/**"
+      - ".github/workflows/build-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate Android project
+        working-directory: ./kuchhv_mobile_app
+        run: flutter create --platforms=android .
+
+      - name: Install Flutter dependencies
+        working-directory: ./kuchhv_mobile_app
+        run: flutter pub get
+
+      - name: Build release APK
+        working-directory: ./kuchhv_mobile_app
+        run: >-
+          flutter build apk --release
+          --dart-define=API_BASE_URL=https://kuchhv-super-app-production.up.railway.app
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KuchhV-Release-APK
+          path: kuchhv_mobile_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
