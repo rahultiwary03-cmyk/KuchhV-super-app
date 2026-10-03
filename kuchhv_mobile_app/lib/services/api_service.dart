@@ -7,7 +7,7 @@ class ApiService {
     http.Client? client,
     String baseUrl = const String.fromEnvironment(
       'API_BASE_URL',
-      defaultValue: 'http://localhost:3000',
+      defaultValue: 'https://kuchhv-super-app-production.up.railway.app',
     ),
   })  : _client = client ?? http.Client(),
         _baseUrl = baseUrl;
