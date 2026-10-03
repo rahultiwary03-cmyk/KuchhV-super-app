@@ -12,6 +12,9 @@ import { OrderEntity } from '../orders/order.entity';
 import { UserEntity } from '../users/user.entity';
 import { DeliveryPartnerEntity } from './delivery-partner.entity';
 import { EventsGateway } from '../events/events.gateway';
+import { WorkflowOtpType } from '../../common/entities/otp-challenge.entity';
+import { WorkflowOtpService } from '../../common/services/workflow-otp.service';
+import { VerifyWorkflowOtpDto } from '../../common/dto/verify-workflow-otp.dto';
 import {
   OnboardPartnerDto,
   ToggleOnlineDto,
@@ -29,6 +32,7 @@ export class DeliveryService {
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
     private readonly eventsGateway: EventsGateway,
+    private readonly otpService: WorkflowOtpService,
   ) {}
 
   async onboardPartner(userId: string, dto: OnboardPartnerDto) {
@@ -102,7 +106,7 @@ export class DeliveryService {
       if (!order) {
         throw new NotFoundException('Order not found');
       }
-      if (order.partner_id || !['PLACED', 'ACCEPTED', 'PREPARING'].includes(order.status)) {
+      if (order.partner_id || order.status !== 'PREPARING') {
         throw new ConflictException('Order is not available for assignment');
       }
 
@@ -148,7 +152,7 @@ export class DeliveryService {
 
       const assignedPartner = eligiblePartners[0];
       order.partner_id = assignedPartner.user_id;
-      order.status = 'OUT_FOR_DELIVERY';
+      order.status = 'READY_FOR_PICKUP';
       await orders.save(order);
 
       return {
@@ -158,9 +162,101 @@ export class DeliveryService {
       };
     });
     if (result.success) {
-      this.eventsGateway.sendOrderStatusUpdate(orderId, 'OUT_FOR_DELIVERY');
+      this.eventsGateway.sendOrderStatusUpdate(orderId, 'READY_FOR_PICKUP');
     }
     return result;
+  }
+
+  async verifyPickupOtp(
+    orderId: string,
+    partnerId: string,
+    dto: VerifyWorkflowOtpDto,
+  ) {
+    const result = await this.dataSource.transaction(async (manager) => {
+      const orders = manager.getRepository(OrderEntity);
+      const order = await orders
+        .createQueryBuilder('order')
+        .setLock('pessimistic_write')
+        .where('order.id = :orderId', { orderId })
+        .getOne();
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+      if (order.partner_id !== partnerId) {
+        throw new ForbiddenException(
+          'Only the assigned delivery partner can verify pickup',
+        );
+      }
+      if (order.status !== 'READY_FOR_PICKUP') {
+        throw new ConflictException('Order is not awaiting pickup');
+      }
+
+      const verified = await this.otpService.consume(
+        {
+          challengeId: dto.challenge_id,
+          code: dto.otp,
+          type: WorkflowOtpType.PICKUP,
+          orderId,
+        },
+        manager,
+      );
+      if (!verified) return false;
+
+      order.status = 'OUT_FOR_DELIVERY';
+      await orders.save(order);
+      return true;
+    });
+    if (!result) {
+      throw new BadRequestException('Invalid, expired, or already used OTP');
+    }
+    this.eventsGateway.sendOrderStatusUpdate(orderId, 'OUT_FOR_DELIVERY');
+    return { success: true, status: 'OUT_FOR_DELIVERY' };
+  }
+
+  async verifyHandoverOtp(
+    orderId: string,
+    partnerId: string,
+    dto: VerifyWorkflowOtpDto,
+  ) {
+    const result = await this.dataSource.transaction(async (manager) => {
+      const orders = manager.getRepository(OrderEntity);
+      const order = await orders
+        .createQueryBuilder('order')
+        .setLock('pessimistic_write')
+        .where('order.id = :orderId', { orderId })
+        .getOne();
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+      if (order.partner_id !== partnerId) {
+        throw new ForbiddenException(
+          'Only the assigned delivery partner can verify delivery',
+        );
+      }
+      if (order.status !== 'OUT_FOR_DELIVERY') {
+        throw new ConflictException('Order is not awaiting handover');
+      }
+
+      const verified = await this.otpService.consume(
+        {
+          challengeId: dto.challenge_id,
+          code: dto.otp,
+          type: WorkflowOtpType.HANDOVER,
+          orderId,
+        },
+        manager,
+      );
+      if (!verified) return false;
+
+      order.status = 'DELIVERED';
+      await orders.save(order);
+      return true;
+    });
+    if (!result) {
+      throw new BadRequestException('Invalid, expired, or already used OTP');
+    }
+    this.eventsGateway.sendOrderStatusUpdate(orderId, 'DELIVERED');
+    return { success: true, status: 'DELIVERED' };
   }
 
   private findPartner(id: string, userId: string, isAdmin: boolean) {

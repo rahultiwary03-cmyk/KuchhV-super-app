@@ -52,4 +52,13 @@ export class OrderController {
       request.user.role === Role.ADMIN,
     );
   }
+
+  @Post(':id/handover-otp')
+  @Roles(Role.CUSTOMER)
+  generateHandoverOtp(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request & { user: JwtPayload },
+  ) {
+    return this.orderService.generateHandoverOtp(id, request.user.sub);
+  }
 }

@@ -39,4 +39,7 @@ export class ShopEntity {
 
   @Column({ type: 'decimal', precision: 3, scale: 2, default: 5.0 })
   rating!: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 10 })
+  commission_percentage!: string;
 }

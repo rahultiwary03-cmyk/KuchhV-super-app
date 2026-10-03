@@ -41,6 +41,19 @@ export class VendorController {
     return this.vendorService.registerShop(request.user.sub, dto);
   }
 
+  @Post('orders/:id/pickup-otp')
+  @Roles(Role.VENDOR, Role.ADMIN)
+  generatePickupOtp(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request & { user: JwtPayload },
+  ) {
+    return this.vendorService.generatePickupOtp(
+      id,
+      request.user.sub,
+      request.user.role === Role.ADMIN,
+    );
+  }
+
   @Get('products')
   @Roles(Role.VENDOR, Role.ADMIN)
   getProducts(

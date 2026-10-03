@@ -24,8 +24,7 @@ export class OrderItemDto {
 
 export class CreateOrderDto {
   @IsUUID()
-  @IsOptional()
-  shop_id?: string;
+  shop_id!: string;
 
   @IsArray()
   @ArrayMinSize(1)

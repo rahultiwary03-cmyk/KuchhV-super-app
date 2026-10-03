@@ -21,12 +21,12 @@ export class OrderEntity {
   @JoinColumn({ name: 'customer_id' })
   customer!: UserEntity;
 
-  @Column({ type: 'varchar', nullable: true })
-  shop_id!: string | null;
+  @Column()
+  shop_id!: string;
 
-  @ManyToOne(() => ShopEntity, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => ShopEntity, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'shop_id' })
-  shop!: ShopEntity | null;
+  shop!: ShopEntity;
 
   @Column({ type: 'varchar', nullable: true })
   partner_id!: string | null;
@@ -37,6 +37,12 @@ export class OrderEntity {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   total_amount!: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  commission_percentage!: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  commission_amount!: string;
 
   @Column({ default: 'PLACED' })
   status!: string;

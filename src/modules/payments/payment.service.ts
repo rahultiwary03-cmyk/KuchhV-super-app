@@ -172,9 +172,11 @@ export class PaymentService {
           if (!order) {
             throw new NotFoundException('Order not found for payment');
           }
-          order.status = 'PAID';
-          await orders.save(order);
-          orderUpdate = { orderId: order.id, status: order.status };
+          if (order.status === 'PLACED') {
+            order.status = 'PAID';
+            await orders.save(order);
+            orderUpdate = { orderId: order.id, status: order.status };
+          }
         }
       } else if (payment.status === 'PENDING') {
         payment.status = 'FAILED';

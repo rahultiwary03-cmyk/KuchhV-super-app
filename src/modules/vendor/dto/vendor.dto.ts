@@ -11,12 +11,8 @@ import {
 } from 'class-validator';
 
 export enum VendorOrderStatus {
-  PLACED = 'PLACED',
   ACCEPTED = 'ACCEPTED',
   PREPARING = 'PREPARING',
-  OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY',
-  DELIVERED = 'DELIVERED',
-  CANCELLED = 'CANCELLED',
   REJECTED = 'REJECTED',
 }
 

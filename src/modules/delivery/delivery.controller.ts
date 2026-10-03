@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { VerifyWorkflowOtpDto } from '../../common/dto/verify-workflow-otp.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -72,5 +73,25 @@ export class DeliveryController {
   @Roles(Role.ADMIN)
   assignPartner(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.deliveryService.assignNearestPartner(orderId);
+  }
+
+  @Post('orders/:id/pickup-otp/verify')
+  @Roles(Role.DELIVERY_PARTNER)
+  verifyPickupOtp(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request & { user: JwtPayload },
+    @Body() dto: VerifyWorkflowOtpDto,
+  ) {
+    return this.deliveryService.verifyPickupOtp(id, request.user.sub, dto);
+  }
+
+  @Post('orders/:id/handover-otp/verify')
+  @Roles(Role.DELIVERY_PARTNER)
+  verifyHandoverOtp(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request & { user: JwtPayload },
+    @Body() dto: VerifyWorkflowOtpDto,
+  ) {
+    return this.deliveryService.verifyHandoverOtp(id, request.user.sub, dto);
   }
 }

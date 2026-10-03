@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { WorkflowOtpType } from '../../common/entities/otp-challenge.entity';
+import { WorkflowOtpService } from '../../common/services/workflow-otp.service';
 import { ProductEntity } from '../products/product.entity';
 import { ShopEntity } from '../shops/shop.entity';
 import { UserEntity } from '../users/user.entity';
@@ -19,6 +21,7 @@ export class OrderService {
     private readonly dataSource: DataSource,
     @InjectRepository(OrderEntity)
     private readonly orderRepo: Repository<OrderEntity>,
+    private readonly otpService: WorkflowOtpService,
   ) {}
 
   async createOrder(customerId: string, dto: CreateOrderDto) {
@@ -40,16 +43,14 @@ export class OrderService {
         throw new BadRequestException('Only customers can place orders');
       }
 
-      const requestedShop = dto.shop_id
-        ? await shops.findOne({
-            where: { id: dto.shop_id },
-            select: { id: true, is_active: true },
-          })
-        : null;
-      if (dto.shop_id && !requestedShop) {
+      const requestedShop = await shops.findOne({
+        where: { id: dto.shop_id },
+        select: { id: true, is_active: true, commission_percentage: true },
+      });
+      if (!requestedShop) {
         throw new NotFoundException('Shop not found');
       }
-      if (requestedShop && !requestedShop.is_active) {
+      if (!requestedShop.is_active) {
         throw new BadRequestException('Shop is not active');
       }
 
@@ -59,7 +60,7 @@ export class OrderService {
         foundProducts.map((product) => [product.id, product]),
       );
 
-      let shopId = dto.shop_id;
+      const shopId = dto.shop_id;
       let totalCents = 0;
       const lineItems = dto.items.map((item) => {
         const product = productById.get(item.product_id);
@@ -77,10 +78,6 @@ export class OrderService {
             'All products must belong to the selected shop',
           );
         }
-        if (shopId === undefined) {
-          shopId = product.shop_id;
-        }
-
         const unitPriceCents = this.toCents(product.price);
         const subtotalCents = unitPriceCents * item.quantity;
         totalCents += subtotalCents;
@@ -104,8 +101,16 @@ export class OrderService {
       const savedOrder = await orders.save(
         orders.create({
           customer_id: customer.id,
-          shop_id: shopId ?? null,
+          shop_id: shopId,
           total_amount: this.fromCents(totalCents),
+          commission_percentage: requestedShop.commission_percentage,
+          commission_amount: this.fromCents(
+            Math.round(
+              (totalCents *
+                this.toCents(requestedShop.commission_percentage)) /
+                10000,
+            ),
+          ),
           delivery_address: dto.delivery_address,
           status: 'PLACED',
         }),
@@ -121,6 +126,8 @@ export class OrderService {
         success: true,
         message: 'Order placed successfully',
         order_id: savedOrder.id,
+        commission_percentage: savedOrder.commission_percentage,
+        commission_amount: savedOrder.commission_amount,
       };
     });
   }
@@ -145,6 +152,28 @@ export class OrderService {
       status: order.status,
       delivery_address: order.delivery_address,
     };
+  }
+
+  async generateHandoverOtp(orderId: string, customerId: string) {
+    const order = await this.orderRepo.findOne({
+      where: { id: orderId, customer_id: customerId },
+      relations: { customer: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    if (order.status !== 'OUT_FOR_DELIVERY' || !order.partner_id) {
+      throw new BadRequestException(
+        'Handover OTP is available only for an assigned order out for delivery',
+      );
+    }
+
+    return this.otpService.issue({
+      type: WorkflowOtpType.HANDOVER,
+      orderId: order.id,
+      createdById: customerId,
+      destinationPhone: order.customer.phone,
+    });
   }
 
   private toCents(amount: number | string): number {

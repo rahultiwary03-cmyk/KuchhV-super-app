@@ -21,6 +21,12 @@ import { ShopEntity } from './modules/shops/shop.entity';
 import { UserEntity } from './modules/users/user.entity';
 import { VendorModule } from './modules/vendor/vendor.module';
 import { EventsModule } from './modules/events/events.module';
+import { ServiceRequestEntity } from './modules/service-requests/service-request.entity';
+import { ServiceRequestModule } from './modules/service-requests/service-request.module';
+import { OtpChallengeEntity } from './common/entities/otp-challenge.entity';
+import { WorkflowOtpModule } from './common/workflow-otp.module';
+import { RideEntity } from './modules/rides/ride.entity';
+import { RideModule } from './modules/rides/ride.module';
 
 @Module({
   imports: [
@@ -28,12 +34,15 @@ import { EventsModule } from './modules/events/events.module';
     ThrottlerModule.forRoot([{ ttl: 10_000, limit: 20 }]),
     CommonModule,
     AuthModule,
+    WorkflowOtpModule,
     EventsModule,
     AdminModule,
     VendorModule,
     OrderModule,
     DeliveryModule,
     CustomRequestModule,
+    ServiceRequestModule,
+    RideModule,
     PaymentModule,
     TypeOrmModule.forFeature([
       UserEntity,
@@ -45,6 +54,9 @@ import { EventsModule } from './modules/events/events.module';
       PaymentEntity,
       CustomRequestEntity,
       CustomRequestBidEntity,
+      ServiceRequestEntity,
+      OtpChallengeEntity,
+      RideEntity,
     ]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -63,6 +75,8 @@ import { EventsModule } from './modules/events/events.module';
                 database: configService.get<string>('DB_DATABASE'),
               }),
           autoLoadEntities: true,
+          migrations: [__dirname + '/migrations/*{.ts,.js}'],
+          migrationsRun: true,
           synchronize:
             configService.get<string>('DB_SYNCHRONIZE') === 'true' ||
             (configService.get<string>('DB_SYNCHRONIZE') !== 'false' &&

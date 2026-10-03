@@ -188,6 +188,30 @@ export class EventsGateway
       .emit('new_custom_request', request);
   }
 
+  broadcastRideRequest(
+    driverIds: string[],
+    ride: Record<string, unknown>,
+  ) {
+    for (const driverId of driverIds) {
+      this.server.to(this.userRoom(driverId)).emit('new_ride_request', ride);
+    }
+  }
+
+  broadcastRideStatus(
+    userIds: string[],
+    ride: { id: string; status: string; customer_id: string; driver_id: string | null },
+  ) {
+    const update = {
+      ride_id: ride.id,
+      status: ride.status,
+      customer_id: ride.customer_id,
+      driver_id: ride.driver_id,
+    };
+    for (const userId of userIds) {
+      this.server.to(this.userRoom(userId)).emit('ride_status_changed', update);
+    }
+  }
+
   private async authenticate(
     client: Socket,
   ): Promise<void> {
@@ -223,6 +247,7 @@ export class EventsGateway
     }
 
     (client.data as SocketAuthData).user = payload;
+    await client.join(this.userRoom(payload.sub));
     if (payload.role === Role.DELIVERY_PARTNER) {
       await this.joinPartnerFeed(client);
     }
@@ -315,5 +340,9 @@ export class EventsGateway
 
   private orderRoom(orderId: string): string {
     return `order_${orderId}`;
+  }
+
+  private userRoom(userId: string): string {
+    return `user_${userId}`;
   }
 }
