@@ -49,19 +49,26 @@ import { EventsModule } from './modules/events/events.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: Number(configService.get<string>('DB_PORT')) || 5432,
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_DATABASE'),
-        autoLoadEntities: true,
-        synchronize:
-          configService.get<string>('DB_SYNCHRONIZE') === 'true' ||
-          (configService.get<string>('DB_SYNCHRONIZE') !== 'false' &&
-            configService.get<string>('NODE_ENV') !== 'production'),
-      }),
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        return {
+          type: 'postgres' as const,
+          ...(databaseUrl
+            ? { url: databaseUrl }
+            : {
+                host: configService.get<string>('DB_HOST'),
+                port: Number(configService.get<string>('DB_PORT')) || 5432,
+                username: configService.get<string>('DB_USERNAME'),
+                password: configService.get<string>('DB_PASSWORD'),
+                database: configService.get<string>('DB_DATABASE'),
+              }),
+          autoLoadEntities: true,
+          synchronize:
+            configService.get<string>('DB_SYNCHRONIZE') === 'true' ||
+            (configService.get<string>('DB_SYNCHRONIZE') !== 'false' &&
+              configService.get<string>('NODE_ENV') !== 'production'),
+        };
+      },
     }),
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
