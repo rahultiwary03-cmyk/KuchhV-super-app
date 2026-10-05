@@ -46,6 +46,9 @@ jobs:
           root = tree.getroot()
           name_attribute = f"{{{android_ns}}}name"
 
+          queries = root.find("queries")
+          application = root.find("application")
+
           for permission_name in (
               "android.permission.INTERNET",
               "android.permission.RECORD_AUDIO",
@@ -54,18 +57,18 @@ jobs:
                   permission.get(name_attribute) == permission_name
                   for permission in root.findall("uses-permission")
               ):
+                  anchor = queries if queries is not None else application
+                  position = list(root).index(anchor) if anchor is not None else len(root)
                   root.insert(
-                      0,
-                      ET.Element(
-                          "uses-permission",
-                          {name_attribute: permission_name},
-                      ),
+                      position,
+                      ET.Element("uses-permission", {name_attribute: permission_name}),
                   )
 
-          queries = root.find("queries")
           if queries is None:
               queries = ET.Element("queries")
-              root.insert(0, queries)
+              application = root.find("application")
+              position = list(root).index(application) if application is not None else len(root)
+              root.insert(position, queries)
 
           for action_name in (
               "android.speech.RecognitionService",
@@ -84,6 +87,49 @@ jobs:
 
           ET.indent(tree, space="    ")
           tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+          PY
+
+      - name: Install native voice channels
+        working-directory: ./kuchhv_mobile_app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          template_path = Path("tool/MainActivity.kt.template")
+          activity_candidates = list(Path("android/app/src/main/kotlin").rglob("MainActivity.kt"))
+          if len(activity_candidates) != 1:
+              raise SystemExit(
+                  f"Expected one generated MainActivity.kt, found {len(activity_candidates)}"
+              )
+
+          activity_path = activity_candidates[0]
+          activity_source = activity_path.read_text(encoding="utf-8")
+          package_match = re.search(r"^package\s+([\w.]+)", activity_source, re.MULTILINE)
+          if package_match is None:
+              raise SystemExit(f"Cannot determine Android package from {activity_path}")
+
+          template = template_path.read_text(encoding="utf-8")
+          template = re.sub(
+              r"^package\s+[\w.]+",
+              f"package {package_match.group(1)}",
+              template,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          activity_path.write_text(template, encoding="utf-8")
+
+          gradle_properties = Path("android/gradle.properties")
+          properties = gradle_properties.read_text(encoding="utf-8")
+          properties = re.sub(
+              r"(?m)^android\.newDsl=.*\n?",
+              "",
+              properties,
+          )
+          gradle_properties.write_text(
+              properties.rstrip() + "\nandroid.newDsl=false\n",
+              encoding="utf-8",
+          )
           PY
 
       - name: Install Flutter dependencies

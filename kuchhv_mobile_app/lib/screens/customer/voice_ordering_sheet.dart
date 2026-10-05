@@ -2,9 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:speech_to_text/speech_to_text.dart' show LocaleName;
 
 import '../../services/voice_intent_parser.dart';
 import '../../services/voice_speech_service.dart';
@@ -29,33 +26,73 @@ class VoiceOrderingSheet extends StatefulWidget {
 
 class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
   final VoiceSpeechService _speech = VoiceSpeechService.instance;
-  final FlutterTts _tts = FlutterTts();
   final VoiceIntentParser _parser = VoiceIntentParser();
   final TextEditingController _textController = TextEditingController();
-  List<LocaleName> _locales = [];
+  late final StreamSubscription<Map<String, dynamic>> _voiceEvents;
+  List<VoiceLocale> _locales = [];
   String? _localeId;
   String? _message;
   VoiceOrderIntent? _intent;
   bool _initialized = false;
   bool _initializing = false;
   bool _speaking = false;
+  bool _isListening = false;
 
   @override
   void initState() {
     super.initState();
+    _voiceEvents = _speech.events.listen(_onVoiceEvent);
     unawaited(_initializeSpeech());
-    _tts.setCompletionHandler(() {
-      if (mounted) setState(() => _speaking = false);
-    });
   }
 
   @override
   void dispose() {
     _textController.dispose();
     unawaited(_speech.stop());
-    _speech.detach();
-    unawaited(_tts.stop());
+    unawaited(_speech.stopSpeaking());
+    unawaited(_voiceEvents.cancel());
     super.dispose();
+  }
+
+  void _onVoiceEvent(Map<String, dynamic> event) {
+    if (!mounted) return;
+    switch (event['type']) {
+      case 'status':
+        setState(() {
+          _isListening = event['status'] == 'listening';
+          if (event['status'] == 'stopped') _isListening = false;
+        });
+        return;
+      case 'result':
+        final words = event['words'] as String? ?? '';
+        setState(() {
+          _textController.text = words;
+          _intent = _parser.parse(words, widget.catalog);
+          _message = _intent!.hasAction
+              ? null
+              : 'I could not match an item yet. Try saying an item name and quantity.';
+        });
+        if (event['final'] == true && _intent!.hasAction) {
+          unawaited(_speakConfirmation());
+        }
+        return;
+      case 'error':
+        setState(() {
+          _isListening = false;
+          _message = event['message'] as String? ?? 'Speech recognition failed.';
+        });
+        return;
+      case 'speechComplete':
+        setState(() => _speaking = false);
+        return;
+      case 'speechError':
+        setState(() {
+          _speaking = false;
+          _message = event['message'] as String? ??
+              'Text-to-speech is unavailable for this language.';
+        });
+        return;
+    }
   }
 
   Future<void> _initializeSpeech() async {
@@ -65,17 +102,8 @@ class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
       _message = null;
     });
     try {
-      final available = await _speech.initialize(
-        onStatus: (status) {
-          if (mounted) setState(() {});
-        },
-        onError: (error) {
-          if (!mounted) return;
-          setState(() => _message = error.errorMsg);
-        },
-        onResult: _onSpeechResult,
-      );
-      final locales = available ? await _speech.locales() : <LocaleName>[];
+      final available = await _speech.initialize();
+      final locales = available ? await _speech.locales() : <VoiceLocale>[];
       if (!mounted) return;
       setState(() {
         _initialized = available;
@@ -99,7 +127,7 @@ class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
     }
   }
 
-  LocaleName? _preferredLocale(List<LocaleName> locales) {
+  VoiceLocale? _preferredLocale(List<VoiceLocale> locales) {
     for (final preferred in ['hi-in', 'en-in', 'bn-in', 'ta-in']) {
       for (final locale in locales) {
         if (locale.localeId.toLowerCase().replaceAll('_', '-') == preferred) {
@@ -114,9 +142,8 @@ class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
   }
 
   Future<void> _toggleListening() async {
-    if (_speech.isListening) {
+    if (_isListening) {
       await _speech.stop();
-      if (mounted) setState(() {});
       return;
     }
     if (!_initialized || _localeId == null) {
@@ -129,29 +156,11 @@ class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
       _intent = null;
     });
     try {
-      await _speech.listen(
-        localeId: localeId,
-        onResult: _onSpeechResult,
-      );
-      if (mounted) setState(() {});
+      await _speech.listen(localeId);
     } on PlatformException catch (error) {
       if (mounted) {
         setState(() => _message = error.message ?? 'Could not start listening.');
       }
-    }
-  }
-
-  void _onSpeechResult(SpeechRecognitionResult result) {
-    if (!mounted) return;
-    setState(() {
-      _textController.text = result.recognizedWords;
-      _intent = _parser.parse(result.recognizedWords, widget.catalog);
-      _message = _intent!.hasAction
-          ? null
-          : 'I could not match an item yet. Try saying an item name and quantity.';
-    });
-    if (result.finalResult && _intent!.hasAction) {
-      unawaited(_speakConfirmation());
     }
   }
 
@@ -200,11 +209,8 @@ class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
               : 'Confirm adding $summary to your cart. $totalSpoken',
     };
     try {
-      await _tts.setLanguage(selectedLocale.replaceAll('_', '-'));
-      await _tts.setSpeechRate(0.45);
-      await _tts.awaitSpeakCompletion(true);
       if (mounted) setState(() => _speaking = true);
-      await _tts.speak(spokenText);
+      await _speech.speak(spokenText, selectedLocale);
     } on PlatformException {
       if (mounted) {
         setState(() {
@@ -252,7 +258,7 @@ class _VoiceOrderingSheetState extends State<VoiceOrderingSheet> {
   @override
   Widget build(BuildContext context) {
     final intent = _intent;
-    final isListening = _speech.isListening;
+    final isListening = _isListening;
     final supportedLocales = _locales;
     final canConfirm = intent != null &&
         intent.hasAction &&

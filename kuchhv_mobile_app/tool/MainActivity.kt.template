@@ -1,0 +1,287 @@
+package com.example.kuchhv_mobile_app
+
+import android.Manifest
+import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodChannel
+import java.util.Locale
+
+class MainActivity : FlutterActivity() {
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var eventSink: EventChannel.EventSink? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var pendingPermissionResult: MethodChannel.Result? = null
+    private var textToSpeech: TextToSpeech? = null
+    private var textToSpeechReady = false
+    private var pendingSpeech: Pair<String, String>? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        textToSpeech = TextToSpeech(this) { status ->
+            textToSpeechReady = status == TextToSpeech.SUCCESS
+            val queued = pendingSpeech
+            pendingSpeech = null
+            if (queued != null) {
+                if (textToSpeechReady) speakNow(queued.first, queued.second)
+                else emit("speechError", "Text-to-speech is unavailable.")
+            }
+        }
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.kuchhv/voice")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "initialize" -> initializeSpeech(result)
+                    "getLocales" -> getSpeechLocales(result)
+                    "startListening" -> {
+                        val localeId = call.argument<String>("localeId")
+                        if (localeId.isNullOrBlank()) {
+                            result.error("invalid_locale", "A speech locale is required.", null)
+                        } else {
+                            startListening(localeId, result)
+                        }
+                    }
+                    "stopListening" -> {
+                        speechRecognizer?.stopListening()
+                        result.success(null)
+                    }
+                    "speak" -> {
+                        val text = call.argument<String>("text")
+                        val localeId = call.argument<String>("localeId")
+                        if (text.isNullOrBlank() || localeId.isNullOrBlank()) {
+                            result.error("invalid_speech", "Text and locale are required.", null)
+                        } else {
+                            speak(text, localeId, result)
+                        }
+                    }
+                    "stopSpeaking" -> {
+                        textToSpeech?.stop()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "com.kuchhv/voice_events")
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, sink: EventChannel.EventSink?) {
+                    eventSink = sink
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    eventSink = null
+                }
+            })
+    }
+
+    private fun initializeSpeech(result: MethodChannel.Result) {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            result.success(false)
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(true)
+            return
+        }
+        if (pendingPermissionResult != null) {
+            result.error("permission_pending", "Microphone permission is already being requested.", null)
+            return
+        }
+        pendingPermissionResult = result
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.RECORD_AUDIO),
+            RECORD_AUDIO_REQUEST,
+        )
+    }
+
+    @Deprecated("Deprecated in Android API")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != RECORD_AUDIO_REQUEST) return
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        pendingPermissionResult?.success(granted)
+        pendingPermissionResult = null
+    }
+
+    private fun getSpeechLocales(result: MethodChannel.Result) {
+        val languageDetails = Intent(RecognizerIntent.ACTION_GET_LANGUAGE_DETAILS)
+        sendOrderedBroadcast(
+            languageDetails,
+            null,
+            object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    val supported = getResultExtras(false)?.getStringArrayList(
+                        RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES,
+                    )
+                    val locales = (supported ?: arrayListOf(Locale.getDefault().toLanguageTag()))
+                        .distinct()
+                        .map { localeId ->
+                            mapOf(
+                                "localeId" to localeId,
+                                "name" to Locale.forLanguageTag(localeId).displayName,
+                            )
+                        }
+                    result.success(locales)
+                }
+            },
+            null,
+            Activity.RESULT_OK,
+            null,
+            null,
+        )
+    }
+
+    private fun startListening(localeId: String, result: MethodChannel.Result) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            result.error("permission_denied", "Microphone permission is required.", null)
+            return
+        }
+        speechRecognizer?.destroy()
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            result.error("recognizer_unavailable", "Device speech recognition is unavailable.", null)
+            return
+        }
+
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer = recognizer
+        recognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) = emit("status", "listening")
+            override fun onBeginningOfSpeech() = Unit
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() = emit("status", "processing")
+
+            override fun onError(error: Int) {
+                emit("error", speechErrorMessage(error))
+                emit("status", "stopped")
+            }
+
+            override fun onResults(results: Bundle?) {
+                sendRecognitionResult(results, true)
+                emit("status", "stopped")
+            }
+
+            override fun onPartialResults(partialResults: Bundle?) {
+                sendRecognitionResult(partialResults, false)
+            }
+
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+        val recognitionIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, localeId)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, localeId)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        recognizer.startListening(recognitionIntent)
+        result.success(null)
+    }
+
+    private fun sendRecognitionResult(results: Bundle?, isFinal: Boolean) {
+        val words = results
+            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            ?.firstOrNull()
+            ?: return
+        emit(
+            "result",
+            mapOf("words" to words, "final" to isFinal),
+        )
+    }
+
+    private fun speak(text: String, localeId: String, result: MethodChannel.Result) {
+        if (!textToSpeechReady) {
+            pendingSpeech = text to localeId
+            result.success(null)
+            return
+        }
+        if (!speakNow(text, localeId)) {
+            result.error("tts_language_unavailable", "Text-to-speech language is unavailable.", null)
+            return
+        }
+        result.success(null)
+    }
+
+    private fun speakNow(text: String, localeId: String): Boolean {
+        val engine = textToSpeech ?: return false
+        val locale = Locale.forLanguageTag(localeId.replace('_', '-'))
+        val languageStatus = engine.setLanguage(locale)
+        if (languageStatus == TextToSpeech.LANG_MISSING_DATA ||
+            languageStatus == TextToSpeech.LANG_NOT_SUPPORTED
+        ) {
+            emit("speechError", "Text-to-speech language is not installed.")
+            return false
+        }
+        engine.setSpeechRate(0.45f)
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+            override fun onDone(utteranceId: String?) = emit("speechComplete", null)
+            @Deprecated("Deprecated in Android API")
+            override fun onError(utteranceId: String?) =
+                emit("speechError", "Text-to-speech failed.")
+        })
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "kuchhv-voice-confirmation")
+        return true
+    }
+
+    private fun speechErrorMessage(error: Int): String = when (error) {
+        SpeechRecognizer.ERROR_AUDIO -> "Audio recording failed."
+        SpeechRecognizer.ERROR_CLIENT -> "Speech recognition was cancelled."
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required."
+        SpeechRecognizer.ERROR_NETWORK,
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech service network error."
+        SpeechRecognizer.ERROR_NO_MATCH -> "No speech was recognized. Please try again."
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognition is busy. Please try again."
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech was detected."
+        else -> "Speech recognition failed (error $error)."
+    }
+
+    private fun emit(type: String, value: Any?) {
+        mainHandler.post {
+            val payload: Map<String, Any?> = when (type) {
+                "result" -> value as Map<String, Any?>
+                else -> mapOf((if (type == "status") "status" else "message") to value)
+            }
+            eventSink?.success(mapOf("type" to type) + payload)
+        }
+    }
+
+    override fun onDestroy() {
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        textToSpeech = null
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val RECORD_AUDIO_REQUEST = 821
+    }
+}

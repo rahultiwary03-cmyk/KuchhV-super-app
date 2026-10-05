@@ -1,72 +1,53 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
-import 'package:speech_to_text/speech_recognition_error.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 
 class VoiceSpeechService {
   VoiceSpeechService._();
 
   static final instance = VoiceSpeechService._();
 
-  final SpeechToText _speech = SpeechToText();
-  Future<bool>? _initialization;
-  void Function(String status)? _onStatus;
-  void Function(SpeechRecognitionError error)? _onError;
-  void Function(SpeechRecognitionResult result)? _onResult;
+  static const _methods = MethodChannel('com.kuchhv/voice');
+  static const _events = EventChannel('com.kuchhv/voice_events');
 
-  bool get isListening => _speech.isListening;
+  Stream<Map<String, dynamic>> get events => _events
+      .receiveBroadcastStream()
+      .map((event) => Map<String, dynamic>.from(event as Map));
 
-  Future<bool> initialize({
-    required void Function(String status) onStatus,
-    required void Function(SpeechRecognitionError error) onError,
-    required void Function(SpeechRecognitionResult result) onResult,
-  }) async {
-    _onStatus = onStatus;
-    _onError = onError;
-    _onResult = onResult;
-    final activeInitialization = _initialization;
-    if (activeInitialization != null) return activeInitialization;
+  Future<bool> initialize() async =>
+      await _methods.invokeMethod<bool>('initialize') ?? false;
 
-    final pendingInitialization = _speech.initialize(
-      onStatus: (status) => _onStatus?.call(status),
-      onError: (error) => _onError?.call(error),
+  Future<List<VoiceLocale>> locales() async {
+    final result = await _methods.invokeListMethod<Map<dynamic, dynamic>>(
+      'getLocales',
     );
-    _initialization = pendingInitialization;
-    try {
-      final available = await pendingInitialization;
-      if (!available) _initialization = null;
-      return available;
-    } on PlatformException {
-      _initialization = null;
-      rethrow;
-    }
+    return (result ?? const [])
+        .map(
+          (locale) => VoiceLocale(
+            localeId: locale['localeId'] as String,
+            name: locale['name'] as String,
+          ),
+        )
+        .toList();
   }
 
-  Future<List<LocaleName>> locales() => _speech.locales();
+  Future<void> listen(String localeId) =>
+      _methods.invokeMethod<void>('startListening', {'localeId': localeId});
 
-  Future<void> listen({
-    required String localeId,
-    required void Function(SpeechRecognitionResult result) onResult,
-  }) async {
-    _onResult = onResult;
-    await _speech.listen(
-      onResult: (result) => _onResult?.call(result),
-      listenOptions: SpeechListenOptions(
-        cancelOnError: true,
-        partialResults: true,
-        listenMode: ListenMode.dictation,
-        localeId: localeId,
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
-      ),
-    );
-  }
+  Future<void> stop() => _methods.invokeMethod<void>('stopListening');
 
-  Future<void> stop() => _speech.stop();
+  Future<void> speak(String text, String localeId) =>
+      _methods.invokeMethod<void>('speak', {
+        'text': text,
+        'localeId': localeId,
+      });
 
-  void detach() {
-    _onStatus = null;
-    _onError = null;
-    _onResult = null;
-  }
+  Future<void> stopSpeaking() => _methods.invokeMethod<void>('stopSpeaking');
+}
+
+class VoiceLocale {
+  const VoiceLocale({required this.localeId, required this.name});
+
+  final String localeId;
+  final String name;
 }
