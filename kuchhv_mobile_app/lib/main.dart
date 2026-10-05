@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'screens/customer/voice_ordering_sheet.dart';
+import 'services/voice_intent_parser.dart';
+
 void main() {
   runApp(
     ChangeNotifierProvider(
@@ -324,6 +327,12 @@ class DemoAppState extends ChangeNotifier {
     } else if (next <= product.stock) {
       cart[product.id] = next;
     }
+    notifyListeners();
+  }
+
+  void clearCart() {
+    if (cart.isEmpty) return;
+    cart.clear();
     notifyListeners();
   }
 
@@ -690,6 +699,28 @@ class _CustomerHomeTabState extends State<CustomerHomeTab> {
           ),
         ),
         SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+            child: OutlinedButton.icon(
+              onPressed: () => _openVoiceOrdering(context, state),
+              icon: const Icon(Icons.mic, color: _orange),
+              label: const Text('Order by voice · Hindi, Hinglish & more'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _orange,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 13,
+                ),
+                side: BorderSide(color: _orange.withOpacity(0.35)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
           child: SizedBox(
             height: 92,
             child: ListView(
@@ -750,6 +781,42 @@ class _CustomerHomeTabState extends State<CustomerHomeTab> {
           ),
       ],
     );
+  }
+}
+
+Future<void> _openVoiceOrdering(
+  BuildContext context,
+  DemoAppState state,
+) async {
+  final shouldCheckout = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    builder: (_) => VoiceOrderingSheet(
+      catalog: state.products
+          .map(
+            (product) => VoiceCatalogItem(
+              id: product.id,
+              name: product.name,
+              category: product.category,
+              stock: product.stock,
+              alreadyInCart: state.cart[product.id] ?? 0,
+              price: product.price,
+            ),
+          )
+          .toList(),
+      onAddToCart: (line) {
+        final product = state.products.firstWhere(
+          (product) => product.id == line.item.id,
+        );
+        state.updateCart(product, line.quantity);
+      },
+      onClearCart: state.clearCart,
+      hasItemsInCart: state.cart.isNotEmpty,
+    ),
+  );
+  if (shouldCheckout == true && context.mounted && state.cart.isNotEmpty) {
+    await _openCheckout(context, state);
   }
 }
 

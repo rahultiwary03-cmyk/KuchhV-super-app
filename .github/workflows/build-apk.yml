@@ -33,9 +33,66 @@ jobs:
         working-directory: ./kuchhv_mobile_app
         run: flutter create --platforms=android .
 
+      - name: Configure speech-recognition permissions
+        working-directory: ./kuchhv_mobile_app
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          manifest_path = "android/app/src/main/AndroidManifest.xml"
+          android_ns = "http://schemas.android.com/apk/res/android"
+          ET.register_namespace("android", android_ns)
+          tree = ET.parse(manifest_path)
+          root = tree.getroot()
+          name_attribute = f"{{{android_ns}}}name"
+
+          for permission_name in (
+              "android.permission.INTERNET",
+              "android.permission.RECORD_AUDIO",
+          ):
+              if not any(
+                  permission.get(name_attribute) == permission_name
+                  for permission in root.findall("uses-permission")
+              ):
+                  root.insert(
+                      0,
+                      ET.Element(
+                          "uses-permission",
+                          {name_attribute: permission_name},
+                      ),
+                  )
+
+          queries = root.find("queries")
+          if queries is None:
+              queries = ET.Element("queries")
+              root.insert(0, queries)
+
+          for action_name in (
+              "android.speech.RecognitionService",
+              "android.intent.action.TTS_SERVICE",
+          ):
+              if not any(
+                  action.get(name_attribute) == action_name
+                  for action in queries.findall("./intent/action")
+              ):
+                  intent = ET.SubElement(queries, "intent")
+                  ET.SubElement(
+                      intent,
+                      "action",
+                      {name_attribute: action_name},
+                  )
+
+          ET.indent(tree, space="    ")
+          tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+          PY
+
       - name: Install Flutter dependencies
         working-directory: ./kuchhv_mobile_app
         run: flutter pub get
+
+      - name: Run Flutter tests
+        working-directory: ./kuchhv_mobile_app
+        run: flutter test
 
       - name: Build release APK
         working-directory: ./kuchhv_mobile_app
