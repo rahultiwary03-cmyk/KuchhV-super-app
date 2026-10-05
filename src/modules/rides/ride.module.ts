@@ -5,9 +5,13 @@ import { UserEntity } from '../users/user.entity';
 import { RideController } from './ride.controller';
 import { RideEntity } from './ride.entity';
 import { RideService } from './ride.service';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([RideEntity, DeliveryPartnerEntity, UserEntity])],
+  imports: [
+    LoyaltyModule,
+    TypeOrmModule.forFeature([RideEntity, DeliveryPartnerEntity, UserEntity]),
+  ],
   controllers: [RideController],
   providers: [RideService],
 })

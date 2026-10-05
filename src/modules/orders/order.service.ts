@@ -15,6 +15,7 @@ import { CreateOrderDto } from './dto/order.dto';
 import { OrderItemEntity } from './order-item.entity';
 import { OrderEntity } from './order.entity';
 import { AdsService } from '../ads/ads.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 
 @Injectable()
 export class OrderService {
@@ -24,6 +25,7 @@ export class OrderService {
     private readonly orderRepo: Repository<OrderEntity>,
     private readonly otpService: WorkflowOtpService,
     private readonly adsService: AdsService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async createOrder(customerId: string, dto: CreateOrderDto) {
@@ -100,11 +102,32 @@ export class OrderService {
         );
       }
 
+      const loyalty = await this.loyaltyService.getCheckoutBenefits(
+        manager,
+        customerId,
+        totalCents,
+        dto.coins_to_redeem ?? 0,
+        dto.use_vip_deal ?? false,
+      );
+      const payableCents = Math.max(
+        0,
+        totalCents +
+          loyalty.deliveryFeeCents -
+          loyalty.vipDealCents -
+          loyalty.coinDiscountCents,
+      );
       const savedOrder = await orders.save(
         orders.create({
           customer_id: customer.id,
           shop_id: shopId,
-          total_amount: this.fromCents(totalCents),
+          total_amount: this.fromCents(payableCents),
+          item_subtotal: this.fromCents(totalCents),
+          delivery_fee: this.fromCents(loyalty.deliveryFeeCents),
+          vip_deal_discount: this.fromCents(loyalty.vipDealCents),
+          coin_discount: this.fromCents(loyalty.coinDiscountCents),
+          coins_redeemed: loyalty.requestedCoins,
+          vip_free_delivery: loyalty.vipFreeDelivery,
+          vip_priority: loyalty.vipActive,
           commission_percentage: requestedShop.commission_percentage,
           commission_amount: this.fromCents(
             Math.round(
@@ -119,6 +142,12 @@ export class OrderService {
         }),
       );
 
+      await this.loyaltyService.reserveOrderCoins(
+        manager,
+        customerId,
+        savedOrder.id,
+        loyalty.requestedCoins,
+      );
       await this.adsService.attachClickToOrder(
         manager,
         dto.ad_click_id,
@@ -140,6 +169,14 @@ export class OrderService {
         order_id: savedOrder.id,
         commission_percentage: savedOrder.commission_percentage,
         commission_amount: savedOrder.commission_amount,
+        item_subtotal: savedOrder.item_subtotal,
+        delivery_fee: savedOrder.delivery_fee,
+        vip_deal_discount: savedOrder.vip_deal_discount,
+        coin_discount: savedOrder.coin_discount,
+        coins_redeemed: savedOrder.coins_redeemed,
+        total_amount: savedOrder.total_amount,
+        vip_free_delivery: savedOrder.vip_free_delivery,
+        vip_priority: savedOrder.vip_priority,
       };
     });
   }

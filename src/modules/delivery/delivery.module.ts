@@ -5,9 +5,11 @@ import { UserEntity } from '../users/user.entity';
 import { DeliveryController } from './delivery.controller';
 import { DeliveryPartnerEntity } from './delivery-partner.entity';
 import { DeliveryService } from './delivery.service';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
   imports: [
+    LoyaltyModule,
     TypeOrmModule.forFeature([
       DeliveryPartnerEntity,
       OrderEntity,

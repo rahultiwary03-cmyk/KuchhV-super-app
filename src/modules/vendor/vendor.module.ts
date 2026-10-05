@@ -6,9 +6,11 @@ import { ShopEntity } from '../shops/shop.entity';
 import { UserEntity } from '../users/user.entity';
 import { VendorController } from './vendor.controller';
 import { VendorService } from './vendor.service';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
   imports: [
+    LoyaltyModule,
     TypeOrmModule.forFeature([
       ShopEntity,
       ProductEntity,

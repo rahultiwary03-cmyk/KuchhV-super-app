@@ -16,6 +16,7 @@ import { WorkflowOtpService } from '../../common/services/workflow-otp.service';
 import { Role } from '../auth/enums/role.enum';
 import { UserEntity } from '../users/user.entity';
 import { getShopCommissionPercentage } from '../shops/shop-commission';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import {
   CreateProductDto,
   RegisterShopDto,
@@ -37,6 +38,7 @@ export class VendorService {
     private readonly configService: ConfigService,
     @InjectRepository(UserEntity)
     private readonly userRepo: Repository<UserEntity>,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async registerShop(ownerId: string, dto: RegisterShopDto) {
@@ -113,28 +115,36 @@ export class VendorService {
     userId: string,
     isAdmin: boolean,
   ) {
-    const order = await this.orderRepo.findOne({
-      where: { id: orderId },
-      relations: { shop: true },
-    });
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-    await this.assertShopOwner(order.shop_id, userId, isAdmin);
+    const savedOrder = await this.orderRepo.manager.transaction(
+      async (manager) => {
+        const order = await manager
+          .getRepository(OrderEntity)
+          .createQueryBuilder('order')
+          .setLock('pessimistic_write')
+          .where('order.id = :orderId', { orderId })
+          .getOne();
+        if (!order) throw new NotFoundException('Order not found');
+        await this.assertShopOwner(order.shop_id, userId, isAdmin);
 
-    const allowedTransition =
-      (dto.status === 'ACCEPTED' || dto.status === 'REJECTED') &&
-      ['PLACED', 'PAID'].includes(order.status)
-        ? true
-        : dto.status === 'PREPARING' && order.status === 'ACCEPTED';
-    if (!allowedTransition) {
-      throw new ConflictException(
-        `Cannot change order from ${order.status} to ${dto.status}`,
-      );
-    }
+        const allowedTransition =
+          (dto.status === 'ACCEPTED' || dto.status === 'REJECTED') &&
+          ['PLACED', 'PAID'].includes(order.status)
+            ? true
+            : dto.status === 'PREPARING' && order.status === 'ACCEPTED';
+        if (!allowedTransition) {
+          throw new ConflictException(
+            `Cannot change order from ${order.status} to ${dto.status}`,
+          );
+        }
 
-    order.status = dto.status;
-    const savedOrder = await this.orderRepo.save(order);
+        order.status = dto.status;
+        const saved = await manager.getRepository(OrderEntity).save(order);
+        if (dto.status === 'REJECTED') {
+          await this.loyaltyService.refundOrderRewards(manager, order);
+        }
+        return saved;
+      },
+    );
     this.eventsGateway.sendOrderStatusUpdate(savedOrder.id, savedOrder.status);
     return savedOrder;
   }

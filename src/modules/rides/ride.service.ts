@@ -15,6 +15,7 @@ import { Role } from '../auth/enums/role.enum';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { DeliveryPartnerEntity } from '../delivery/delivery-partner.entity';
 import { WalletService } from '../wallet/wallet.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import {
   WalletTransactionDirection,
   WalletTransactionType,
@@ -43,6 +44,7 @@ export class RideService {
     private readonly eventsGateway: EventsGateway,
     private readonly otpService: WorkflowOtpService,
     private readonly walletService: WalletService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async book(customerId: string, dto: BookRideDto) {
@@ -330,6 +332,12 @@ export class RideService {
       ride.status = RideStatus.COMPLETED;
       await manager.getRepository(DeliveryPartnerEntity).save(partner);
       const completed = await rides.save(ride);
+      await this.loyaltyService.awardCompletedRide(
+        manager,
+        ride.customer_id,
+        ride.id,
+        ride.final_fare,
+      );
       return {
         success: true,
         ride: completed,

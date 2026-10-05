@@ -30,6 +30,7 @@ import { RideEntity } from './modules/rides/ride.entity';
 import { RideModule } from './modules/rides/ride.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { AdsModule } from './modules/ads/ads.module';
+import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AdsModule } from './modules/ads/ads.module';
     RideModule,
     WalletModule,
     AdsModule,
+    LoyaltyModule,
     PaymentModule,
     TypeOrmModule.forFeature([
       UserEntity,

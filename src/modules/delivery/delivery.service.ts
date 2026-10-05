@@ -16,6 +16,7 @@ import { WorkflowOtpType } from '../../common/entities/otp-challenge.entity';
 import { WorkflowOtpService } from '../../common/services/workflow-otp.service';
 import { VerifyWorkflowOtpDto } from '../../common/dto/verify-workflow-otp.dto';
 import { WalletService } from '../wallet/wallet.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import {
   OnboardPartnerDto,
   ToggleOnlineDto,
@@ -35,6 +36,7 @@ export class DeliveryService {
     private readonly eventsGateway: EventsGateway,
     private readonly otpService: WorkflowOtpService,
     private readonly walletService: WalletService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async onboardPartner(userId: string, dto: OnboardPartnerDto) {
@@ -253,13 +255,48 @@ export class DeliveryService {
       order.status = 'DELIVERED';
       await orders.save(order);
       await this.walletService.settleDeliveredOrder(manager, order.id);
+      const deliveredOrder = await orders.findOneOrFail({
+        where: { id: order.id },
+      });
+      await this.loyaltyService.awardDeliveredOrder(manager, deliveredOrder);
       return true;
     });
     if (!result) {
       throw new BadRequestException('Invalid, expired, or already used OTP');
     }
+
     this.eventsGateway.sendOrderStatusUpdate(orderId, 'DELIVERED');
     return { success: true, status: 'DELIVERED' };
+  }
+
+  async getDispatchQueue(userId: string) {
+    const partner = await this.partnerRepo.findOne({
+      where: { user_id: userId, is_online: true, kyc_status: 'VERIFIED' },
+      select: { id: true },
+    });
+    if (!partner) {
+      throw new ForbiddenException(
+        'Verified delivery partners must be online to view the dispatch queue',
+      );
+    }
+    return this.orderRepo
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.shop', 'shop')
+      .where('order.status = :status', { status: 'PREPARING' })
+      .andWhere('order.partner_id IS NULL')
+      .orderBy('order.vip_priority', 'DESC')
+      .addOrderBy('order.created_at', 'ASC')
+      .select([
+        'order.id',
+        'order.status',
+        'order.total_amount',
+        'order.vip_priority',
+        'order.created_at',
+        'shop.id',
+        'shop.name',
+      ])
+      .take(50)
+      .getMany();
   }
 
   private findPartner(id: string, userId: string, isAdmin: boolean) {

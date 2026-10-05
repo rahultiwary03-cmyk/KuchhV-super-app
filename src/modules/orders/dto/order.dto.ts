@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsBoolean,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -45,4 +46,14 @@ export class CreateOrderDto {
   @IsUUID()
   @IsOptional()
   ad_click_id?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  coins_to_redeem?: number;
+
+  @IsBoolean()
+  @IsOptional()
+  use_vip_deal?: boolean;
 }

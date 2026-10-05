@@ -41,6 +41,27 @@ export class OrderEntity {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   total_amount!: string;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  item_subtotal!: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 30 })
+  delivery_fee!: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  vip_deal_discount!: string;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  coin_discount!: string;
+
+  @Column({ type: 'integer', default: 0 })
+  coins_redeemed!: number;
+
+  @Column({ type: 'boolean', default: false })
+  vip_free_delivery!: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  vip_priority!: boolean;
+
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   commission_percentage!: string;
 

@@ -189,7 +189,9 @@ export class WalletService {
       });
     if (!isPaidByWallet && !isPaidByGateway) return;
 
-    const grossCents = this.toCents(order.total_amount);
+    const grossCents = this.toCents(
+      Number(order.item_subtotal) > 0 ? order.item_subtotal : order.total_amount,
+    );
     const commissionCents = this.toCents(order.commission_amount);
     if (commissionCents > grossCents) {
       throw new ConflictException('Order commission exceeds the paid amount');
@@ -228,8 +230,9 @@ export class WalletService {
 
     const cashbackPercent = this.getCashbackPercent();
     const cashbackPercentCents = this.toCents(cashbackPercent);
+    const amountPaidCents = this.toCents(order.total_amount);
     const cashbackCents = Math.floor(
-      (grossCents * cashbackPercentCents) / 10000,
+      (amountPaidCents * cashbackPercentCents) / 10000,
     );
     if (cashbackCents > 0) {
       await this.postTransaction(manager, {

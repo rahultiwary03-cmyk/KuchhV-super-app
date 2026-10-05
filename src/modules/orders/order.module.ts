@@ -8,10 +8,12 @@ import { OrderItemEntity } from './order-item.entity';
 import { OrderEntity } from './order.entity';
 import { OrderService } from './order.service';
 import { AdsModule } from '../ads/ads.module';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
   imports: [
     AdsModule,
+    LoyaltyModule,
     TypeOrmModule.forFeature([
       OrderEntity,
       OrderItemEntity,

@@ -113,6 +113,30 @@ store a location.
   with opening-balance ledger entries. The ledger prevents replay of recharge,
   order, cashback, ride, and payout events.
 
+## VIP Pass and KuchhV Coins
+
+- `GET /loyalty` returns the customer's coin balance, VIP membership status,
+  available scratch-card count, and earned badges. `GET /loyalty/transactions`
+  returns the latest 100 coin-ledger entries.
+- Customers can buy a 30-day VIP Pass for ₹99 from their wallet with
+  `POST /loyalty/vip/subscribe`. Renewals are manual; an active membership is
+  extended by 30 days. VIP orders with an item subtotal of at least ₹199 have
+  the ₹30 delivery fee waived. VIP orders may also use one monthly deal: 5% off
+  an item subtotal of at least ₹299, capped at ₹50. VIP orders are marked for
+  priority in `GET /partner/dispatch/queue`.
+- Orders accept optional `coins_to_redeem` (whole coins, one coin = ₹1) and
+  `use_vip_deal` fields. Coin redemption is limited to 20% of the item
+  subtotal and the customer's available balance. Benefits and redeemed coins
+  are snapshotted on the order; redeemed coins and an eligible VIP deal are
+  restored if the vendor rejects it.
+- Paid orders earn coins worth 1% of the amount paid, credited after delivery.
+  Completed rides earn coins worth 1% of the fare. Coin awards and milestone
+  badges are recorded idempotently in the loyalty ledger.
+- Each paid delivered order issues one scratch card. Customers list cards with
+  `GET /loyalty/scratch-cards` and reveal/redeem its guaranteed 1–25 coin prize
+  once with `POST /loyalty/scratch-cards/:id/scratch`. Unrevealed prize values
+  are not included in the list response.
+
 ## Sponsored ads
 
 - Vendors create sponsored listing or banner campaigns with

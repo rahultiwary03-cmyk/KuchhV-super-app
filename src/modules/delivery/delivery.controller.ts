@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -73,6 +74,12 @@ export class DeliveryController {
   @Roles(Role.ADMIN)
   assignPartner(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.deliveryService.assignNearestPartner(orderId);
+  }
+
+  @Get('dispatch/queue')
+  @Roles(Role.DELIVERY_PARTNER)
+  getDispatchQueue(@Req() request: Request & { user: JwtPayload }) {
+    return this.deliveryService.getDispatchQueue(request.user.sub);
   }
 
   @Post('orders/:id/pickup-otp/verify')
