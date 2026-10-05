@@ -41,4 +41,8 @@ export class CreateOrderDto {
   @IsString()
   @IsNotEmpty()
   delivery_address!: string;
+
+  @IsUUID()
+  @IsOptional()
+  ad_click_id?: string;
 }

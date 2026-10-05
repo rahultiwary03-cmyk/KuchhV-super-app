@@ -113,6 +113,38 @@ store a location.
   with opening-balance ledger entries. The ledger prevents replay of recharge,
   order, cashback, ride, and payout events.
 
+## Sponsored ads
+
+- Vendors create sponsored listing or banner campaigns with
+  `POST /ads/campaigns`. The vendor must own an active shop and have an
+  approved account. Sponsored listings require an available product; banner
+  images and optional links must use HTTPS.
+- Each campaign selects CPC (bid in INR per click) or CPM (bid in INR per
+  1,000 impressions), a category/search target, and a total budget. The budget
+  is reserved from the vendor wallet at campaign creation, so ads cannot spend
+  more than the funded amount. Unused budget is returned by
+  `POST /ads/campaigns/:id/stop`; campaign reservations remain held until the
+  vendor stops the campaign.
+- Customers retrieve bid-ranked placements with
+  `GET /ads/placements?placement=SPONSORED_LISTING&query=...&category=...` or
+  `placement=BANNER`. Clients should record an impression only when the ad is
+  actually visible and record clicks through
+  `POST /ads/campaigns/:id/impressions` and
+  `POST /ads/campaigns/:id/clicks`, sending a fresh `event_id`. A click must
+  follow a recorded visible impression. Interactions are idempotent and limited
+  to one billable impression and click per customer, campaign, and UTC day.
+  CPC campaigns charge on click; CPM campaigns accrue the bid across
+  impressions, rounded to paise, with campaign budget as a hard cap.
+- Send the click response's `event_id` as `ad_click_id` when creating an order
+  from the advertised shop. Valid customer clicks are attributed for seven
+  days. Conversion value currently records the placed order total (not payment
+  or delivery completion).
+- Vendors list their campaigns at `GET /ads/campaigns` and fetch current
+  impression, click, CTR, conversion, conversion-rate, spend, conversion-value,
+  and ROAS aggregates at `GET /ads/campaigns/:id/analytics`. Analytics update
+  as events/orders are recorded. The route provides dashboard data; a vendor
+  dashboard UI is not included.
+
 ## Marketplace and verification workflow
 
 - Catalog checkout requires a `shop_id`; every item must belong to that shop.

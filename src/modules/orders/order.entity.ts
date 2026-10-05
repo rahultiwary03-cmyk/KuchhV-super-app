@@ -31,6 +31,9 @@ export class OrderEntity {
   @Column({ type: 'varchar', nullable: true })
   partner_id!: string | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  ad_click_id!: string | null;
+
   @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'partner_id' })
   partner!: UserEntity | null;

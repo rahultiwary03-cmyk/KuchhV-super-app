@@ -14,6 +14,7 @@ import { UserEntity } from '../users/user.entity';
 import { CreateOrderDto } from './dto/order.dto';
 import { OrderItemEntity } from './order-item.entity';
 import { OrderEntity } from './order.entity';
+import { AdsService } from '../ads/ads.service';
 
 @Injectable()
 export class OrderService {
@@ -22,6 +23,7 @@ export class OrderService {
     @InjectRepository(OrderEntity)
     private readonly orderRepo: Repository<OrderEntity>,
     private readonly otpService: WorkflowOtpService,
+    private readonly adsService: AdsService,
   ) {}
 
   async createOrder(customerId: string, dto: CreateOrderDto) {
@@ -113,7 +115,17 @@ export class OrderService {
           ),
           delivery_address: dto.delivery_address,
           status: 'PLACED',
+          ad_click_id: dto.ad_click_id ?? null,
         }),
+      );
+
+      await this.adsService.attachClickToOrder(
+        manager,
+        dto.ad_click_id,
+        customerId,
+        shopId,
+        savedOrder.id,
+        savedOrder.total_amount,
       );
 
       await orderItems.save(

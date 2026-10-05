@@ -29,6 +29,7 @@ import { WorkflowOtpModule } from './common/workflow-otp.module';
 import { RideEntity } from './modules/rides/ride.entity';
 import { RideModule } from './modules/rides/ride.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { AdsModule } from './modules/ads/ads.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { WalletModule } from './modules/wallet/wallet.module';
     ServiceRequestModule,
     RideModule,
     WalletModule,
+    AdsModule,
     PaymentModule,
     TypeOrmModule.forFeature([
       UserEntity,

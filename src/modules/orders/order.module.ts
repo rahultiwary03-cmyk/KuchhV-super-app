@@ -7,9 +7,11 @@ import { OrderController } from './order.controller';
 import { OrderItemEntity } from './order-item.entity';
 import { OrderEntity } from './order.entity';
 import { OrderService } from './order.service';
+import { AdsModule } from '../ads/ads.module';
 
 @Module({
   imports: [
+    AdsModule,
     TypeOrmModule.forFeature([
       OrderEntity,
       OrderItemEntity,

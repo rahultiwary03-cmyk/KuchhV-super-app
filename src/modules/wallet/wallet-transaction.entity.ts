@@ -24,6 +24,8 @@ export enum WalletTransactionType {
   CASHBACK = 'CASHBACK',
   PAYOUT = 'PAYOUT',
   PAYOUT_REVERSAL = 'PAYOUT_REVERSAL',
+  AD_CAMPAIGN_FUNDING = 'AD_CAMPAIGN_FUNDING',
+  AD_CAMPAIGN_REFUND = 'AD_CAMPAIGN_REFUND',
 }
 
 @Entity('wallet_transactions')
