@@ -14,6 +14,11 @@ import { EventsGateway } from '../events/events.gateway';
 import { Role } from '../auth/enums/role.enum';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { DeliveryPartnerEntity } from '../delivery/delivery-partner.entity';
+import { WalletService } from '../wallet/wallet.service';
+import {
+  WalletTransactionDirection,
+  WalletTransactionType,
+} from '../wallet/wallet-transaction.entity';
 import { UserEntity } from '../users/user.entity';
 import { BookRideDto, VerifyRideOtpDto } from './dto/ride.dto';
 import { RideEntity, RideStatus, RideVehicleType } from './ride.entity';
@@ -37,6 +42,7 @@ export class RideService {
     private readonly userRepo: Repository<UserEntity>,
     private readonly eventsGateway: EventsGateway,
     private readonly otpService: WorkflowOtpService,
+    private readonly walletService: WalletService,
   ) {}
 
   async book(customerId: string, dto: BookRideDto) {
@@ -306,6 +312,17 @@ export class RideService {
         (this.toCents(partner.wallet_balance) + earningsCents) /
         100
       ).toFixed(2);
+      if (earningsCents > 0) {
+        await this.walletService.postTransaction(manager, {
+          userId: driverId,
+          type: WalletTransactionType.RIDE_EARNING,
+          direction: WalletTransactionDirection.CREDIT,
+          amount: this.walletService.fromCents(earningsCents),
+          idempotencyKey: `ride-earning:${ride.id}`,
+          referenceId: ride.id,
+          description: `Driver earnings for completed ride ${ride.id}`,
+        });
+      }
       ride.final_fare = (finalFareCents / 100).toFixed(2);
       ride.platform_commission = (commissionCents / 100).toFixed(2);
       ride.driver_earnings = (earningsCents / 100).toFixed(2);

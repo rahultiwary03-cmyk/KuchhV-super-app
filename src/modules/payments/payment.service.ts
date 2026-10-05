@@ -15,6 +15,12 @@ import { OrderEntity } from '../orders/order.entity';
 import { EventsGateway } from '../events/events.gateway';
 import { CreateRazorpayOrderDto } from './dto/payment.dto';
 import { PaymentEntity } from './payment.entity';
+import { WalletService } from '../wallet/wallet.service';
+import {
+  WalletTransactionDirection,
+  WalletTransactionType,
+} from '../wallet/wallet-transaction.entity';
+import { WalletRechargeEntity } from '../wallet/wallet-recharge.entity';
 
 interface RazorpayWebhookPayment {
   id?: string;
@@ -42,26 +48,49 @@ export class PaymentService {
     @InjectRepository(OrderEntity)
     private readonly orderRepo: Repository<OrderEntity>,
     private readonly eventsGateway: EventsGateway,
+    private readonly walletService: WalletService,
   ) {}
 
-  async createRazorpayOrder(dto: CreateRazorpayOrderDto, customerId: string) {
-    const order = await this.orderRepo.findOne({
-      where: { id: dto.order_id },
-    });
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-    if (order.customer_id !== customerId) {
-      throw new ForbiddenException('You cannot pay for this order');
-    }
-
-    const amountPaise = this.toPaise(order.total_amount);
-    if (amountPaise <= 0 || this.toPaise(dto.amount) !== amountPaise) {
+  async createWalletRecharge(amount: number, customerId: string) {
+    const amountPaise = this.toPaise(amount);
+    if (amountPaise < 5000 || amountPaise > 5000000) {
       throw new BadRequestException(
-        'Payment amount must match the order total',
+        'Wallet recharge must be between INR 50 and INR 50,000',
       );
     }
+    const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
+    if (!keyId || !keySecret) {
+      throw new ServiceUnavailableException(
+        'Razorpay credentials are not configured',
+      );
+    }
+    const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+    const razorpayOrder = await razorpay.orders.create({
+      amount: amountPaise,
+      currency: 'INR',
+      receipt: `wallet-${customerId.slice(0, 8)}-${Date.now()}`,
+    });
+    await this.dataSource.getRepository(WalletRechargeEntity).save(
+      this.dataSource.getRepository(WalletRechargeEntity).create({
+        user_id: customerId,
+        razorpay_order_id: razorpayOrder.id,
+        razorpay_payment_id: null,
+        amount: (amountPaise / 100).toFixed(2),
+        status: 'PENDING',
+      }),
+    );
+    return {
+      success: true,
+      razorpay_order_id: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      key_id: keyId,
+      checkout_method: 'UPI_OR_CARD',
+    };
+  }
 
+  async createRazorpayOrder(dto: CreateRazorpayOrderDto, customerId: string) {
     const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
     if (!keyId || !keySecret) {
@@ -70,25 +99,73 @@ export class PaymentService {
       );
     }
 
+    const payment = await this.dataSource.transaction(async (manager) => {
+      const order = await manager
+        .getRepository(OrderEntity)
+        .createQueryBuilder('order')
+        .setLock('pessimistic_write')
+        .where('order.id = :orderId', { orderId: dto.order_id })
+        .getOne();
+      if (!order) throw new NotFoundException('Order not found');
+      if (order.customer_id !== customerId) {
+        throw new ForbiddenException('You cannot pay for this order');
+      }
+      if (order.status !== 'PLACED') {
+        throw new ConflictException('Order is not awaiting payment');
+      }
+
+      const amountPaise = this.toPaise(order.total_amount);
+      if (amountPaise <= 0 || this.toPaise(dto.amount) !== amountPaise) {
+        throw new BadRequestException(
+          'Payment amount must match the order total',
+        );
+      }
+      const payments = manager.getRepository(PaymentEntity);
+      const pending = await payments.findOne({
+        where: [
+          { order_id: order.id, status: 'INITIATING' },
+          { order_id: order.id, status: 'PENDING' },
+        ],
+      });
+      if (pending) {
+        throw new ConflictException(
+          'A payment attempt already exists for this order',
+        );
+      }
+      return payments.save(
+        payments.create({
+          order_id: order.id,
+          transaction_id: null,
+          payment_mode: 'RAZORPAY',
+          amount: order.total_amount,
+          status: 'INITIATING',
+        }),
+      );
+    });
+
     const razorpay = new Razorpay({
       key_id: keyId,
       key_secret: keySecret,
     });
-    const razorpayOrder = await razorpay.orders.create({
-      amount: amountPaise,
-      currency: 'INR',
-      receipt: order.id,
-    });
-
-    await this.paymentRepo.save(
-      this.paymentRepo.create({
-        order_id: order.id,
-        transaction_id: razorpayOrder.id,
-        payment_mode: 'RAZORPAY',
-        amount: order.total_amount,
-        status: 'PENDING',
-      }),
-    );
+    let razorpayOrder: {
+      id: string;
+      amount: number | string;
+      currency: string;
+    };
+    try {
+      razorpayOrder = await razorpay.orders.create({
+        amount: this.toPaise(payment.amount),
+        currency: 'INR',
+        receipt: payment.order_id,
+      });
+    } catch (error) {
+      payment.status = 'FAILED';
+      await this.paymentRepo.save(payment);
+      throw error;
+    }
+    payment.transaction_id = razorpayOrder.id;
+    payment.status = 'PENDING';
+    await this.paymentRepo.save(payment);
 
     return {
       success: true,
@@ -145,8 +222,50 @@ export class PaymentService {
         where: { transaction_id: razorpayOrderId },
       });
       if (!payment) {
+        const recharge = await manager
+          .getRepository(WalletRechargeEntity)
+          .createQueryBuilder('recharge')
+          .setLock('pessimistic_write')
+          .where('recharge.razorpay_order_id = :razorpayOrderId', {
+            razorpayOrderId,
+          })
+          .getOne();
+        if (!recharge) {
+          return {
+            response: { status: 'ok', ignored: true },
+            orderUpdate: undefined,
+          };
+        }
+        if (event.event === 'payment.captured') {
+          if (
+            capturedPayment.currency !== 'INR' ||
+            capturedPayment.amount !== this.toPaise(recharge.amount) ||
+            !capturedPayment.id
+          ) {
+            throw new BadRequestException(
+              'Wallet recharge payment amount, currency, or ID is invalid',
+            );
+          }
+          if (recharge.status !== 'SUCCESS') {
+            recharge.status = 'SUCCESS';
+            recharge.razorpay_payment_id = capturedPayment.id;
+            await manager.getRepository(WalletRechargeEntity).save(recharge);
+            await this.walletService.postTransaction(manager, {
+              userId: recharge.user_id,
+              type: WalletTransactionType.RECHARGE,
+              direction: WalletTransactionDirection.CREDIT,
+              amount: recharge.amount,
+              idempotencyKey: `wallet-recharge:${recharge.id}`,
+              referenceId: capturedPayment.id,
+              description: 'Wallet recharge captured by Razorpay',
+            });
+          }
+        } else if (recharge.status === 'PENDING') {
+          recharge.status = 'FAILED';
+          await manager.getRepository(WalletRechargeEntity).save(recharge);
+        }
         return {
-          response: { status: 'ok', ignored: true },
+          response: { status: 'ok' },
           orderUpdate: undefined,
         };
       }
@@ -227,6 +346,7 @@ export class PaymentService {
           : undefined;
       if (
         !entity ||
+        typeof entity.id !== 'string' ||
         typeof entity.order_id !== 'string' ||
         typeof entity.amount !== 'number' ||
         !Number.isFinite(entity.amount) ||
@@ -240,6 +360,7 @@ export class PaymentService {
         payload: {
           payment: {
             entity: {
+              id: entity.id,
               order_id: entity.order_id,
               amount: entity.amount,
               currency: entity.currency,

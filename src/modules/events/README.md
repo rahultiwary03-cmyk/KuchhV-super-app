@@ -52,9 +52,10 @@ store a location.
   only the assigned driver can verify it at `PATCH /rides/:id/start`.
 - `PATCH /rides/:id/complete` settles the estimated fare: platform commission
   is deducted and the driver's share is atomically credited to
-  `delivery_partners.wallet_balance`. This is an internal wallet credit, not a
-  Razorpay customer charge or external payout. Actual road distance is not yet
-  tracked, so final fare currently equals the booking estimate.
+  both `delivery_partners.wallet_balance` and the driver's wallet ledger. This
+  is an internal wallet credit, not a Razorpay customer charge or external
+  payout. Actual road distance is not yet tracked, so final fare currently
+  equals the booking estimate.
 
 ## Category-wise shop commission
 
@@ -70,11 +71,47 @@ store a location.
   do not rewrite existing order terms. Existing orders retain a zero snapshot;
   the migration does not retroactively charge commission.
 - Commission is recorded against the product subtotal and does not change what
-  the customer pays. Vendor payout/settlement is not yet implemented.
+  the customer pays. For paid, delivered orders, vendors receive the net
+  proceeds in their wallet and can receive scheduled UPI payouts.
 - New home-service requests snapshot the configured
   `SHOP_COMMISSION_HOME_SERVICES_PERCENT` rate. The booking flow has no agreed
   price or service-payment settlement yet, so the commission amount is not
   calculated or collected for service requests.
+
+## Wallet, cashback, and UPI settlement
+
+- `POST /payments/wallet/recharge` creates a Razorpay Checkout order for ₹50
+  to ₹50,000. The client completes UPI or card payment through Razorpay
+  Checkout; only a signature-verified `payment.captured` webhook credits the
+  wallet. Configure `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and
+  `RAZORPAY_WEBHOOK_SECRET`.
+- `GET /wallet` and `GET /wallet/transactions` return the signed-in user's
+  INR balance and ledger. `POST /wallet/orders/:id/pay` atomically debits that
+  customer's wallet and marks the order paid. Peer-to-peer wallet transfers
+  are intentionally not available.
+- On delivery of a paid order, the vendor wallet receives the gross proceeds
+  and a commission debit is posted separately, leaving the category-rate net
+  balance. The customer receives configurable cashback (default 1%) once,
+  after completion. Completed rides credit driver wallet earnings and ledger.
+- Vendors and verified delivery partners register a UPI VPA with
+  `PUT /wallet/payout-profile`. The VPA is encrypted in the application
+  database; set `WALLET_PII_ENCRYPTION_KEY` to a strong deployment secret.
+  RazorpayX contact/fund-account setup also requires `RAZORPAYX_KEY_ID` and
+  `RAZORPAYX_KEY_SECRET`.
+- Payout batches run daily at 01:15 Asia/Kolkata by default, or weekly on
+  Monday with `WALLET_PAYOUT_FREQUENCY=weekly`. Set `WALLET_PAYOUTS_ENABLED=true`,
+  `RAZORPAYX_ACCOUNT_NUMBER`, and `RAZORPAYX_WEBHOOK_SECRET` only after
+  RazorpayX is onboarded, funded, and its webhook is configured. Payouts are
+  submitted to the provider and complete asynchronously; a scheduled batch
+  does not guarantee instant bank/UPI settlement. Failed/reversed payouts are
+  returned to the wallet from the signed payout webhook. Admins can request a
+  manual batch with `POST /wallet/admin/payout-batches`. Stuck payouts can be
+  reconciled with `POST /wallet/admin/payouts/:id/reconcile`; this queries
+  RazorpayX when an ID is known or retries with the same provider idempotency
+  key when the initial response was ambiguous.
+- Existing delivery-partner wallet balances are migrated into wallet accounts
+  with opening-balance ledger entries. The ledger prevents replay of recharge,
+  order, cashback, ride, and payout events.
 
 ## Marketplace and verification workflow
 

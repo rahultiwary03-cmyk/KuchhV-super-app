@@ -15,6 +15,7 @@ import { EventsGateway } from '../events/events.gateway';
 import { WorkflowOtpType } from '../../common/entities/otp-challenge.entity';
 import { WorkflowOtpService } from '../../common/services/workflow-otp.service';
 import { VerifyWorkflowOtpDto } from '../../common/dto/verify-workflow-otp.dto';
+import { WalletService } from '../wallet/wallet.service';
 import {
   OnboardPartnerDto,
   ToggleOnlineDto,
@@ -33,6 +34,7 @@ export class DeliveryService {
     private readonly userRepo: Repository<UserEntity>,
     private readonly eventsGateway: EventsGateway,
     private readonly otpService: WorkflowOtpService,
+    private readonly walletService: WalletService,
   ) {}
 
   async onboardPartner(userId: string, dto: OnboardPartnerDto) {
@@ -250,6 +252,7 @@ export class DeliveryService {
 
       order.status = 'DELIVERED';
       await orders.save(order);
+      await this.walletService.settleDeliveredOrder(manager, order.id);
       return true;
     });
     if (!result) {

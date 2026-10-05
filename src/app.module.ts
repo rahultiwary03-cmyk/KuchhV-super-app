@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminModule } from './modules/admin/admin.module';
@@ -27,10 +28,12 @@ import { OtpChallengeEntity } from './common/entities/otp-challenge.entity';
 import { WorkflowOtpModule } from './common/workflow-otp.module';
 import { RideEntity } from './modules/rides/ride.entity';
 import { RideModule } from './modules/rides/ride.module';
+import { WalletModule } from './modules/wallet/wallet.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 10_000, limit: 20 }]),
     CommonModule,
     AuthModule,
@@ -43,6 +46,7 @@ import { RideModule } from './modules/rides/ride.module';
     CustomRequestModule,
     ServiceRequestModule,
     RideModule,
+    WalletModule,
     PaymentModule,
     TypeOrmModule.forFeature([
       UserEntity,

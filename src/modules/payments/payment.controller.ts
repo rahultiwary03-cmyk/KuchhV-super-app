@@ -16,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { CreateRazorpayOrderDto } from './dto/payment.dto';
 import { PaymentService } from './payment.service';
+import { RechargeWalletDto } from '../wallet/dto/wallet.dto';
 
 @ApiTags('payments')
 @Controller('payments')
@@ -31,6 +32,20 @@ export class PaymentController {
     @Req() request: Request & { user: JwtPayload },
   ) {
     return this.paymentService.createRazorpayOrder(dto, request.user.sub);
+  }
+
+  @Post('wallet/recharge')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.CUSTOMER)
+  rechargeWallet(
+    @Body() dto: RechargeWalletDto,
+    @Req() request: Request & { user: JwtPayload },
+  ) {
+    return this.paymentService.createWalletRecharge(
+      dto.amount,
+      request.user.sub,
+    );
   }
 
   @Post('webhook')
