@@ -33,15 +33,6 @@ enum UserRole {
   }
 }
 
-Future<void> savePartnerKycStatus(String status) async {
-  final preferences = await SharedPreferences.getInstance();
-  final userId = _userId;
-  if (userId == null) return;
-  await preferences.setString(_partnerKycKey(userId), status);
-  _partnerKycStatus = status;
-  notifyListeners();
-}
-
 class AuthProvider extends ChangeNotifier {
   AuthProvider({ApiService? apiService}) : api = apiService ?? ApiService();
 
@@ -78,8 +69,6 @@ class AuthProvider extends ChangeNotifier {
     final preferences = await SharedPreferences.getInstance();
     final token = preferences.getString(_accessTokenKey);
     _refreshToken = preferences.getString(_refreshTokenKey);
-
-    _partnerKycStatus = preferences.getString(_partnerKycKey);
 
     if (token != null) {
       try {
@@ -237,6 +226,15 @@ class AuthProvider extends ChangeNotifier {
     if (userId == null) return;
     await preferences.setString(_partnerIdKey(userId), partnerId);
     _partnerId = partnerId;
+    notifyListeners();
+  }
+
+  Future<void> savePartnerKycStatus(String status) async {
+    final preferences = await SharedPreferences.getInstance();
+    final userId = _userId;
+    if (userId == null) return;
+    await preferences.setString(_partnerKycKey(userId), status);
+    _partnerKycStatus = status;
     notifyListeners();
   }
 
