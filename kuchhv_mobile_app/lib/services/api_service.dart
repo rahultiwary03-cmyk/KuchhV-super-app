@@ -10,28 +10,55 @@ class ApiService {
       defaultValue: 'https://kuchhv-super-app-production.up.railway.app',
     ),
   })  : _client = client ?? http.Client(),
-        _baseUrl = baseUrl;
+        _baseUrl = baseUrl.replaceFirst(RegExp(r'/+$'), '');
 
   final http.Client _client;
   final String _baseUrl;
 
-  Future<Map<String, dynamic>> get(
-    String path, {
-    String? accessToken,
-  }) async {
+  Future<dynamic> get(String path, {String? accessToken}) async {
     final response = await _client
         .get(_uri(path), headers: _headers(accessToken))
         .timeout(const Duration(seconds: 15));
     return _decodeResponse(response);
   }
 
-  Future<Map<String, dynamic>> post(
+  Future<dynamic> post(
     String path, {
     Map<String, dynamic>? body,
     String? accessToken,
   }) async {
     final response = await _client
         .post(
+          _uri(path),
+          headers: _headers(accessToken),
+          body: jsonEncode(body ?? <String, dynamic>{}),
+        )
+        .timeout(const Duration(seconds: 15));
+    return _decodeResponse(response);
+  }
+
+  Future<dynamic> patch(
+    String path, {
+    Map<String, dynamic>? body,
+    String? accessToken,
+  }) async {
+    final response = await _client
+        .patch(
+          _uri(path),
+          headers: _headers(accessToken),
+          body: jsonEncode(body ?? <String, dynamic>{}),
+        )
+        .timeout(const Duration(seconds: 15));
+    return _decodeResponse(response);
+  }
+
+  Future<dynamic> put(
+    String path, {
+    Map<String, dynamic>? body,
+    String? accessToken,
+  }) async {
+    final response = await _client
+        .put(
           _uri(path),
           headers: _headers(accessToken),
           body: jsonEncode(body ?? <String, dynamic>{}),
@@ -51,7 +78,7 @@ class ApiService {
         if (accessToken != null) 'Authorization': 'Bearer $accessToken',
       };
 
-  Map<String, dynamic> _decodeResponse(http.Response response) {
+  dynamic _decodeResponse(http.Response response) {
     final dynamic decoded =
         response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -59,9 +86,6 @@ class ApiService {
           ? decoded['message']?.toString() ?? 'Request failed'
           : 'Request failed';
       throw ApiException(response.statusCode, message);
-    }
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Expected a JSON object from the API');
     }
     return decoded;
   }
