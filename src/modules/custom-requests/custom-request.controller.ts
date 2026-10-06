@@ -38,6 +38,12 @@ export class CustomRequestController {
     return this.customReqService.createRequest(request.user.sub, dto);
   }
 
+  @Get('customer')
+  @Roles(Role.CUSTOMER)
+  getCustomerRequests(@Req() request: Request & { user: JwtPayload }) {
+    return this.customReqService.getCustomerRequests(request.user.sub);
+  }
+
   @Get('feed')
   @Roles(Role.DELIVERY_PARTNER, Role.ADMIN)
   getBroadcastingRequests() {

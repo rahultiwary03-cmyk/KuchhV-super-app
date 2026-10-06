@@ -6,15 +6,17 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 import { UserEntity } from '../users/user.entity';
 
 @Entity('vip_memberships')
+@Unique('UQ_vip_memberships_user_id', ['user_id'])
 export class VipMembershipEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'uuid', unique: true })
+  @Column({ type: 'uuid' })
   user_id!: string;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })

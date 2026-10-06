@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 import { WalletAccountEntity } from './wallet-account.entity';
 
@@ -30,9 +31,7 @@ export enum WalletTransactionType {
 }
 
 @Entity('wallet_transactions')
-@Index('UQ_wallet_transactions_idempotency_key', ['idempotency_key'], {
-  unique: true,
-})
+@Unique('UQ_wallet_transactions_idempotency_key', ['idempotency_key'])
 @Index('IDX_wallet_transactions_account_created', ['wallet_id', 'created_at'])
 export class WalletTransactionEntity {
   @PrimaryGeneratedColumn('uuid')

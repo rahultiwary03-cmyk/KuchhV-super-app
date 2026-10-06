@@ -87,6 +87,12 @@ jobs:
 
           ET.indent(tree, space="    ")
           tree.write(manifest_path, encoding="utf-8", xml_declaration=True)
+          permissions = {
+              permission.get(name_attribute)
+              for permission in root.findall("uses-permission")
+          }
+          if "android.permission.INTERNET" not in permissions:
+              raise SystemExit("Android manifest is missing INTERNET permission")
           PY
 
       - name: Install native voice channels

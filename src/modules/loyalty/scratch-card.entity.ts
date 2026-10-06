@@ -6,11 +6,13 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 import { OrderEntity } from '../orders/order.entity';
 import { UserEntity } from '../users/user.entity';
 
 @Entity('loyalty_scratch_cards')
+@Unique('UQ_loyalty_scratch_cards_order', ['source_order_id'])
 export class ScratchCardEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -22,7 +24,7 @@ export class ScratchCardEntity {
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 
-  @Column({ type: 'uuid', unique: true })
+  @Column({ type: 'uuid' })
   source_order_id!: string;
 
   @ManyToOne(() => OrderEntity, { onDelete: 'CASCADE' })

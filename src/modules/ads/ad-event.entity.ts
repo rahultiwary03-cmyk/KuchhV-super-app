@@ -6,6 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 import { AdCampaignEntity } from './ad-campaign.entity';
 import { OrderEntity } from '../orders/order.entity';
@@ -18,8 +19,8 @@ export enum AdEventType {
 }
 
 @Entity('ad_events')
-@Index('UQ_ad_events_event_key', ['event_key'], { unique: true })
-@Index('UQ_ad_events_dedupe_key', ['dedupe_key'], { unique: true })
+@Unique('UQ_ad_events_event_key', ['event_key'])
+@Unique('UQ_ad_events_dedupe_key', ['dedupe_key'])
 @Index('UQ_ad_events_conversion_order', ['order_id'], {
   unique: true,
   where: '"order_id" IS NOT NULL',

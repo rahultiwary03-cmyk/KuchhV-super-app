@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { WorkflowOtpType } from '../../common/entities/otp-challenge.entity';
 import { WorkflowOtpService } from '../../common/services/workflow-otp.service';
 import { EventsGateway } from '../events/events.gateway';
@@ -356,6 +356,51 @@ export class RideService {
       where: { customer_id: customerId },
       order: { created_at: 'DESC' },
     });
+  }
+
+  async getDriverDispatchQueue(driverId: string) {
+    const partner = await this.partnerRepo.findOne({
+      where: {
+        user_id: driverId,
+        is_online: true,
+        kyc_status: 'VERIFIED',
+      },
+    });
+    if (!partner) {
+      throw new ForbiddenException(
+        'Verified delivery partners must be online to view ride requests',
+      );
+    }
+    if (partner.current_lat === null || partner.current_lng === null) {
+      return [];
+    }
+    const radiusKm = this.getPositiveConfigNumber('RIDE_MATCH_RADIUS_KM', 5);
+    const requests = await this.rideRepo.find({
+      where: {
+        driver_id: IsNull(),
+        status: RideStatus.REQUESTED,
+        vehicle_type: partner.vehicle_type as RideVehicleType,
+      },
+      order: { created_at: 'ASC' },
+      take: 50,
+    });
+    const activeRides = await this.rideRepo.find({
+      where: [
+        { driver_id: driverId, status: RideStatus.ACCEPTED },
+        { driver_id: driverId, status: RideStatus.IN_PROGRESS },
+      ],
+      order: { created_at: 'ASC' },
+    });
+    const nearbyRequests = requests.filter(
+      (ride) =>
+        this.distanceKm(
+          Number(ride.pickup_latitude),
+          Number(ride.pickup_longitude),
+          Number(partner.current_lat),
+          Number(partner.current_lng),
+        ) <= radiusKm,
+    );
+    return [...activeRides, ...nearbyRequests];
   }
 
   async getRide(rideId: string, user: JwtPayload) {

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Role } from '../auth/enums/role.enum';
 import { DeliveryPartnerEntity } from '../delivery/delivery-partner.entity';
 import { UserEntity } from '../users/user.entity';
@@ -72,6 +72,28 @@ export class CustomRequestService {
       where: { status: 'BROADCASTING' },
       order: { created_at: 'DESC' },
     });
+  }
+
+  async getCustomerRequests(customerId: string) {
+    const requests = await this.customReqRepo.find({
+      where: { customer_id: customerId },
+      order: { created_at: 'DESC' },
+    });
+    if (requests.length === 0) return [];
+    const bids = await this.bidRepo.find({
+      where: { request_id: In(requests.map((request) => request.id)) },
+      order: { created_at: 'ASC' },
+    });
+    const bidsByRequest = new Map<string, CustomRequestBidEntity[]>();
+    for (const bid of bids) {
+      const grouped = bidsByRequest.get(bid.request_id) ?? [];
+      grouped.push(bid);
+      bidsByRequest.set(bid.request_id, grouped);
+    }
+    return requests.map((request) => ({
+      ...request,
+      bids: bidsByRequest.get(request.id) ?? [],
+    }));
   }
 
   async submitBid(requestId: string, partnerId: string, dto: SubmitBidDto) {

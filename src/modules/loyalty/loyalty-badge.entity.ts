@@ -2,17 +2,15 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 import { UserEntity } from '../users/user.entity';
 
 @Entity('loyalty_badges')
-@Index('UQ_loyalty_badges_user_key', ['user_id', 'badge_key'], {
-  unique: true,
-})
+@Unique('UQ_loyalty_badges_user_key', ['user_id', 'badge_key'])
 export class LoyaltyBadgeEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

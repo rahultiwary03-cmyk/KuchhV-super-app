@@ -299,6 +299,18 @@ export class DeliveryService {
       .getMany();
   }
 
+  getPartnerOrders(userId: string) {
+    return this.orderRepo.find({
+      where: [
+        { partner_id: userId, status: 'READY_FOR_PICKUP' },
+        { partner_id: userId, status: 'OUT_FOR_DELIVERY' },
+      ],
+      relations: { shop: true },
+      order: { created_at: 'ASC' },
+      take: 50,
+    });
+  }
+
   private findPartner(id: string, userId: string, isAdmin: boolean) {
     return this.partnerRepo.findOne({ where: { id } }).then((partner) => {
       if (!partner) {

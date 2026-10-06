@@ -48,6 +48,12 @@ export class ServiceRequestController {
     return this.serviceRequestService.getProviderFeed();
   }
 
+  @Get('provider')
+  @Roles(Role.SERVICE_PROVIDER)
+  getProviderRequests(@Req() request: Request & { user: JwtPayload }) {
+    return this.serviceRequestService.getProviderRequests(request.user.sub);
+  }
+
   @Post(':id/accept')
   @Roles(Role.SERVICE_PROVIDER)
   accept(

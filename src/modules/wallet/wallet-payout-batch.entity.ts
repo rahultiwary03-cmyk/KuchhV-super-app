@@ -3,14 +3,16 @@ import {
   CreateDateColumn,
   Entity,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 
 @Entity('wallet_payout_batches')
+@Unique('UQ_wallet_payout_batches_batch_key', ['batch_key'])
 export class WalletPayoutBatchEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true })
+  @Column({ type: 'varchar', length: 100 })
   batch_key!: string;
 
   @Column({ type: 'varchar', length: 16 })

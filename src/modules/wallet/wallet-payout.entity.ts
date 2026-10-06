@@ -7,17 +7,14 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 import { UserEntity } from '../users/user.entity';
 import { WalletAccountEntity } from './wallet-account.entity';
 
 @Entity('wallet_payouts')
-@Index('UQ_wallet_payouts_idempotency_key', ['idempotency_key'], {
-  unique: true,
-})
-@Index('UQ_wallet_payouts_provider_payout_id', ['provider_payout_id'], {
-  unique: true,
-})
+@Unique('UQ_wallet_payouts_idempotency_key', ['idempotency_key'])
+@Unique('UQ_wallet_payouts_provider_payout_id', ['provider_payout_id'])
 export class WalletPayoutEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

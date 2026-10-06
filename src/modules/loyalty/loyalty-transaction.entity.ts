@@ -2,10 +2,10 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 import { UserEntity } from '../users/user.entity';
 
@@ -18,9 +18,7 @@ export enum LoyaltyTransactionType {
 }
 
 @Entity('loyalty_transactions')
-@Index('UQ_loyalty_transactions_idempotency_key', ['idempotency_key'], {
-  unique: true,
-})
+@Unique('UQ_loyalty_transactions_idempotency_key', ['idempotency_key'])
 export class LoyaltyTransactionEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -41,7 +39,7 @@ export class LoyaltyTransactionEntity {
   @Column({ type: 'integer' })
   balance_after!: number;
 
-  @Column({ type: 'varchar', length: 160, unique: true })
+  @Column({ type: 'varchar', length: 160 })
   idempotency_key!: string;
 
   @Column({ type: 'varchar', length: 160, nullable: true })

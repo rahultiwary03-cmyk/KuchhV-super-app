@@ -6,15 +6,17 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 import { UserEntity } from '../users/user.entity';
 
 @Entity('wallet_accounts')
+@Unique('UQ_wallet_accounts_user_id', ['user_id'])
 export class WalletAccountEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ type: 'uuid', unique: true })
+  @Column({ type: 'uuid' })
   user_id!: string;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })

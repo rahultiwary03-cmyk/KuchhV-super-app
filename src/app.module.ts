@@ -31,6 +31,7 @@ import { RideModule } from './modules/rides/ride.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { AdsModule } from './modules/ads/ads.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { CatalogModule } from './modules/shops/catalog.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { LoyaltyModule } from './modules/loyalty/loyalty.module';
     WalletModule,
     AdsModule,
     LoyaltyModule,
+    CatalogModule,
     PaymentModule,
     TypeOrmModule.forFeature([
       UserEntity,
@@ -86,9 +88,8 @@ import { LoyaltyModule } from './modules/loyalty/loyalty.module';
           migrations: [__dirname + '/migrations/*{.ts,.js}'],
           migrationsRun: true,
           synchronize:
-            configService.get<string>('DB_SYNCHRONIZE') === 'true' ||
-            (configService.get<string>('DB_SYNCHRONIZE') !== 'false' &&
-              configService.get<string>('NODE_ENV') !== 'production'),
+            configService.get<string>('NODE_ENV') === 'development' &&
+            configService.get<string>('DB_SYNCHRONIZE') !== 'false',
         };
       },
     }),

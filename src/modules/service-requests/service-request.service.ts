@@ -66,6 +66,13 @@ export class ServiceRequestService {
     });
   }
 
+  getProviderRequests(providerId: string) {
+    return this.requestRepo.find({
+      where: { service_provider_id: providerId },
+      order: { created_at: 'DESC' },
+    });
+  }
+
   getProviderFeed() {
     return this.requestRepo.find({
       where: {

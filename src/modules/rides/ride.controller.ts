@@ -41,6 +41,12 @@ export class RideController {
     return this.rideService.getCustomerRides(request.user.sub);
   }
 
+  @Get('dispatch/queue')
+  @Roles(Role.DELIVERY_PARTNER)
+  getDriverDispatchQueue(@Req() request: Request & { user: JwtPayload }) {
+    return this.rideService.getDriverDispatchQueue(request.user.sub);
+  }
+
   @Get(':id')
   @Roles(Role.CUSTOMER, Role.DELIVERY_PARTNER, Role.ADMIN)
   getRide(

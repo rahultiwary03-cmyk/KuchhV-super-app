@@ -82,6 +82,12 @@ export class DeliveryController {
     return this.deliveryService.getDispatchQueue(request.user.sub);
   }
 
+  @Get('orders/current')
+  @Roles(Role.DELIVERY_PARTNER)
+  getPartnerOrders(@Req() request: Request & { user: JwtPayload }) {
+    return this.deliveryService.getPartnerOrders(request.user.sub);
+  }
+
   @Post('orders/:id/pickup-otp/verify')
   @Roles(Role.DELIVERY_PARTNER)
   verifyPickupOtp(

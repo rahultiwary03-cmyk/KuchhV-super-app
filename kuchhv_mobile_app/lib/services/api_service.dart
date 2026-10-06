@@ -5,20 +5,23 @@ import 'package:http/http.dart' as http;
 class ApiService {
   ApiService({
     http.Client? client,
+    Duration timeout = const Duration(seconds: 8),
     String baseUrl = const String.fromEnvironment(
       'API_BASE_URL',
       defaultValue: 'https://kuchhv-super-app-production.up.railway.app',
     ),
   })  : _client = client ?? http.Client(),
-        _baseUrl = baseUrl.replaceFirst(RegExp(r'/+$'), '');
+        _baseUrl = baseUrl.replaceFirst(RegExp(r'/+$'), ''),
+        _timeout = timeout;
 
   final http.Client _client;
   final String _baseUrl;
+  final Duration _timeout;
 
   Future<dynamic> get(String path, {String? accessToken}) async {
     final response = await _client
         .get(_uri(path), headers: _headers(accessToken))
-        .timeout(const Duration(seconds: 15));
+        .timeout(_timeout);
     return _decodeResponse(response);
   }
 
@@ -33,7 +36,7 @@ class ApiService {
           headers: _headers(accessToken),
           body: jsonEncode(body ?? <String, dynamic>{}),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(_timeout);
     return _decodeResponse(response);
   }
 
@@ -48,7 +51,7 @@ class ApiService {
           headers: _headers(accessToken),
           body: jsonEncode(body ?? <String, dynamic>{}),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(_timeout);
     return _decodeResponse(response);
   }
 
@@ -63,7 +66,7 @@ class ApiService {
           headers: _headers(accessToken),
           body: jsonEncode(body ?? <String, dynamic>{}),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(_timeout);
     return _decodeResponse(response);
   }
 
