@@ -2663,10 +2663,10 @@ class _WalletRewardsPageState extends State<_WalletRewardsPage> {
                       onPressed: _busy || active ? null : _subscribeVip,
                       child: Text(active ? 'Active' : 'Subscribe'),
                     ),
-                    ],
+
                   ),
                 );
-              },
+            },
             ),
             const SizedBox(height: 8),
             Text('Scratch cards', style: Theme.of(context).textTheme.titleMedium),
@@ -2679,7 +2679,7 @@ class _WalletRewardsPageState extends State<_WalletRewardsPage> {
                 }
                 final cards = _maps(snapshot.data);
                 if (cards.isEmpty) {
-                  return const _DataCard(title: 'No scratch cards yet', subtitle: 'Eligible completed orders can unlock rewards.');
+                  return _DataCard(title: 'No scratch cards yet', subtitle: 'Eligible completed orders can unlock rewards.');
                 }
                 return Column(
                   children: [
@@ -2695,8 +2695,9 @@ class _WalletRewardsPageState extends State<_WalletRewardsPage> {
                       ),
                   ],
                 );
-              },
-            ),
+            },
+          ),
+        ],
             const SizedBox(height: 14),
             Text('Wallet transactions', style: Theme.of(context).textTheme.titleMedium),
             _Collection(
